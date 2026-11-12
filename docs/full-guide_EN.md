@@ -789,10 +789,9 @@ Edit `.github/workflows/00-daily-analysis.yml`:
 schedule:
   # UTC time, Beijing time = UTC + 8
   - cron: '30 6 * * 1-5'   # Monday to Friday 14:30, market review only
-  - cron: '0 10 * * 1-5'   # Monday to Friday 18:00 (Beijing Time)
 ```
 
-The 14:30 schedule uses `market-only` mode and sends the market review through the configured notification channels. The 18:00 schedule keeps `full` mode, and manual runs keep the selected mode. Scheduled runs retain trading-day checks. GitHub Actions queueing and environment setup may delay execution and delivery beyond the scheduled time.
+The only scheduled run is Monday to Friday at 14:30 Beijing time, using `market-only` mode and the configured notification channels. The previous 18:00 full-analysis schedule is removed. Manual runs keep the selected mode. Scheduled runs retain trading-day checks. GitHub Actions queueing and environment setup may delay execution and delivery beyond the scheduled time.
 
 Common time reference:
 

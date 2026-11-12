@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-- [改进] GitHub Actions 新增周一至周五北京时间 14:30 的大盘复盘定时任务，仅执行 market-only 模式；保留 18:00 完整分析、手动模式选择及交易日检查。
+- [改进] GitHub Actions 定时任务改为仅在周一至周五北京时间 14:30 执行 market-only 大盘复盘，取消原有 18:00 完整分析的定时触发；保留手动模式选择及交易日检查。
 
 - [修复] 补齐聚合日报的钉钉 Webhook 分发分支，修复渠道已配置却被识别为“未知通知渠道”而未发送的问题；沿用逐渠道诊断、失败隔离和降噪状态管理。
 
