@@ -1,0 +1,70 @@
+
+name: Test DingTalk Robot
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-dingtalk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send DingTalk Test Message
+        env:
+          WEBHOOK: ${{ secrets.DINGTALK_WEBHOOK_URL }}
+          SECRET: ${{ secrets.DINGTALK_SECRET }}
+        run: |
+          python - <<'PY'
+          import os
+          import time
+          import hmac
+          import hashlib
+          import base64
+          import json
+          import urllib.parse
+          import urllib.request
+
+          webhook = os.environ["WEBHOOK"]
+          secret = os.environ["SECRET"]
+
+          timestamp = str(round(time.time() * 1000))
+          message = f"{timestamp}\n{secret}"
+
+          signature = base64.b64encode(
+              hmac.new(
+                  secret.encode(),
+                  message.encode(),
+                  hashlib.sha256
+              ).digest()
+          ).decode()
+
+          params = urllib.parse.urlencode({
+              "timestamp": timestamp,
+              "sign": signature
+          })
+
+          url = webhook + "&" + params
+
+          payload = {
+              "msgtype": "text",
+              "text": {
+                  "content": "股票分析助手：钉钉机器人连接测试成功！"
+              }
+          }
+
+          request = urllib.request.Request(
+              url,
+              data=json.dumps(payload).encode(),
+              headers={"Content-Type": "application/json"},
+              method="POST"
+          )
+
+          with urllib.request.urlopen(
+              request, timeout=15
+          ) as response:
+              result = json.load(response)
+
+          print("DingTalk result:", result)
+
+          if result.get("errcode") != 0:
+              raise RuntimeError("DingTalk test failed")
+          PY
