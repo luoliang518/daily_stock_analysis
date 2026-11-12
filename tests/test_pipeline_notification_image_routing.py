@@ -562,5 +562,74 @@ class TestPipelineFeishuFileRouting(unittest.TestCase):
         pipeline.notifier.send_to_feishu.assert_not_called()
 
 
+class TestPipelineDingtalkRouting(unittest.TestCase):
+    def _build_pipeline(self, channels):
+        pipeline = StockAnalysisPipeline.__new__(StockAnalysisPipeline)
+        pipeline.notifier = _FakeRoutedNotifier(channels)
+        pipeline.notifier.get_available_channels.return_value = [
+            NotificationChannel.DINGTALK, NotificationChannel.TELEGRAM,
+        ]
+        pipeline.notifier.send_to_dingtalk = MagicMock(return_value=True)
+        pipeline.config = SimpleNamespace(stock_email_groups=[])
+        return pipeline
+
+    def test_dingtalk_only_report_records_success(self):
+        pipeline = self._build_pipeline([NotificationChannel.DINGTALK])
+        token = activate_run_diagnostic_context(trace_id="trace-dingtalk")
+        try:
+            pipeline._send_notifications(
+                [SimpleNamespace(code="000547"), SimpleNamespace(code="600030")],
+                ReportType.SIMPLE,
+            )
+            runs = current_diagnostic_snapshot()["notification_runs"]
+        finally:
+            reset_run_diagnostic_context(token)
+
+        pipeline.notifier.send_to_dingtalk.assert_called_once_with("report:000547,600030")
+        pipeline.notifier.send_to_telegram.assert_not_called()
+        self.assertEqual([(r["channel"], r["status"]) for r in runs], [("dingtalk", "success")])
+        pipeline.notifier.record_noise_control.assert_called_once()
+        pipeline.notifier.release_noise_control.assert_not_called()
+
+    def test_dingtalk_failure_records_failure_and_releases_noise_reservation(self):
+        for outcome in (False, RuntimeError("dingtalk failed")):
+            with self.subTest(outcome=outcome):
+                pipeline = self._build_pipeline([NotificationChannel.DINGTALK])
+                if isinstance(outcome, Exception):
+                    pipeline.notifier.send_to_dingtalk.side_effect = outcome
+                else:
+                    pipeline.notifier.send_to_dingtalk.return_value = outcome
+                token = activate_run_diagnostic_context(trace_id="trace-dingtalk-failed")
+                try:
+                    pipeline._send_notifications([SimpleNamespace(code="000547")], ReportType.SIMPLE)
+                    runs = current_diagnostic_snapshot()["notification_runs"]
+                finally:
+                    reset_run_diagnostic_context(token)
+
+                pipeline.notifier.send_to_dingtalk.assert_called_once_with("report:000547")
+                self.assertEqual([(r["channel"], r["status"]) for r in runs], [("dingtalk", "failed")])
+                pipeline.notifier.record_noise_control.assert_not_called()
+                pipeline.notifier.release_noise_control.assert_called_once()
+
+    def test_dingtalk_exception_does_not_skip_later_channel(self):
+        pipeline = self._build_pipeline([NotificationChannel.DINGTALK, NotificationChannel.TELEGRAM])
+        pipeline.notifier.send_to_dingtalk.side_effect = RuntimeError("dingtalk failed")
+
+        pipeline._send_notifications([SimpleNamespace(code="000547")], ReportType.SIMPLE)
+
+        pipeline.notifier.send_to_dingtalk.assert_called_once_with("report:000547")
+        pipeline.notifier.send_to_telegram.assert_called_once_with("report:000547")
+        pipeline.notifier.record_noise_control.assert_called_once()
+        pipeline.notifier.release_noise_control.assert_not_called()
+
+    def test_report_route_can_exclude_dingtalk(self):
+        pipeline = self._build_pipeline([NotificationChannel.TELEGRAM])
+
+        pipeline._send_notifications([SimpleNamespace(code="000547")], ReportType.SIMPLE)
+
+        pipeline.notifier.send_to_dingtalk.assert_not_called()
+        pipeline.notifier.send_to_telegram.assert_called_once_with("report:000547")
+
+
 if __name__ == "__main__":
     unittest.main()
